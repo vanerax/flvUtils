@@ -20,12 +20,19 @@ flvUtils.parseStream = function(inStream, options) {
       inStream.once('data', (chunk) => {
          assert.ok(chunk.length >= 9);
 
-         var type = chunk.slice(0, 3).toString();
-         assert.equal('FLV', type);
+         // fill metadata
+         var oMetadata = {
+            type: chunk.slice(0, 3),
+            version: chunk.readUInt8(0x03),
+            streamInfo: chunk.readUInt8(0x04),
+            headerLength: chunk.readUInt32BE(0x05)
+         };
 
-         var headerLength = chunk.readInt32BE(0x05);
-         var bfHeader = chunk.slice(0, headerLength);
-         nStreamIndex += headerLength;
+         assert.equal('FLV', oMetadata.type.toString());
+         
+         var bfHeader = chunk.slice(0, oMetadata.headerLength);
+         nStreamIndex += oMetadata.headerLength;
+         
          if (fOnGetHeader) {
             fOnGetHeader(bfHeader);
          }
@@ -37,7 +44,6 @@ flvUtils.parseStream = function(inStream, options) {
    }
 
    function parseBody() {
-      //console.log('>> parseBody');
       inStream.on('data', (chunk) => {
          arrBuffer.push(chunk);
          parseBodyByBuffer();
@@ -74,8 +80,20 @@ flvUtils.parseStream = function(inStream, options) {
          //console.log('>> ', dataLenth);
          if (bfAll.length >= PREV_TAG_SIZE + TAG_HEADER_SIZE + dataLenth) {
             var bfTag = bfAll.slice(0, PREV_TAG_SIZE + TAG_HEADER_SIZE + dataLenth);
+
+            // fill metadata
+            var oMetadata = {
+               prevTagSize: bfTag.readUInt32BE(),
+               tagType: bfTag.readUInt8(PREV_TAG_SIZE),
+               dataLength: dataLenth,
+               timestamp: bfTag.readUIntBE(PREV_TAG_SIZE + 4, 3),
+               timestampExt: bfTag.readUIntBE(PREV_TAG_SIZE + 7, 1),
+               streamsID: bfTag.readUIntBE(PREV_TAG_SIZE + 8, 3),
+               data: bfTag.slice(PREV_TAG_SIZE + 11, PREV_TAG_SIZE + TAG_HEADER_SIZE + dataLenth)
+            };
+
             if (fOnGetTag) {
-               fOnGetTag(bfTag);
+               fOnGetTag(bfTag, oMetadata);
             }
             nTagIndex++;
 
