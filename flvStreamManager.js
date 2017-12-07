@@ -10,6 +10,7 @@ class FlvStreamManager {
    constructor() {
       this._mode = FlvStreamMode.FAST_RESPONSE;
       this._keyFramesToCache = 1;
+      this._eventEmitter = new EventEmitter();
    }
 
    getMode() {
@@ -31,7 +32,7 @@ class FlvStreamManager {
    }
 
    track(flvStream) {
-      reset();
+      this.reset();
       this._flvStream = flvStream;
       flvUtils.parseStream(flvStream, {
          onGetHeader: this._onGetHeader,
@@ -41,11 +42,25 @@ class FlvStreamManager {
    }
 
    untrack() {
-
+      var oSocket = this._flvStream.socket;
+      oSocket.destroy();
+      this._tracking = false;
    }
 
-   subscribe() {
+   subscribe(fOnData, fOnEnd) {
+      if (!this._tracking) {
+         return;
+      }
 
+      fOnData(this._streamHeader);
+      fOnData(Buffer.concat(this._streamTopTags));
+      this._eventEmitter.addListener('data', fOnData);
+      this._eventEmitter.addListener('end', fOnEnd);
+   }
+
+   unsubscribe(fOnData, fOnEnd) {
+      this._eventEmitter.removeListener('data', fOnData);
+      this._eventEmitter.removeListener('end', fOnEnd);
    }
 
    _onGetHeader(bfData, oMetadata) {
@@ -55,6 +70,9 @@ class FlvStreamManager {
    _onGetTag(bfData, oMetadata) {
       if (this._streamTagsCount < 3) {
          this._streamTopTags.push(bfData);
+         if (this._streamTagsCount === 2) {
+            this._tracking = true;
+         }
       } else {
          this._pushStreamToCaches(bfData, oMetadata);
       }
