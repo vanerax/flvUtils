@@ -34,10 +34,10 @@ flvUtils.parseStream = function(inStream, options) {
          nStreamIndex += oMetadata.headerLength;
          
          if (fOnGetHeader) {
-            fOnGetHeader(bfHeader);
+            fOnGetHeader(bfHeader, oMetadata);
          }
          // add rest part to buffer
-         arrBuffer.push(chunk.slice(0 + headerLength));
+         arrBuffer.push(chunk.slice(0 + oMetadata.headerLength));
          
          parseBody();
       });
@@ -89,8 +89,34 @@ flvUtils.parseStream = function(inStream, options) {
                timestamp: bfTag.readUIntBE(PREV_TAG_SIZE + 4, 3),
                timestampExt: bfTag.readUIntBE(PREV_TAG_SIZE + 7, 1),
                streamsID: bfTag.readUIntBE(PREV_TAG_SIZE + 8, 3),
-               data: bfTag.slice(PREV_TAG_SIZE + 11, PREV_TAG_SIZE + TAG_HEADER_SIZE + dataLenth)
+               data: bfTag.slice(PREV_TAG_SIZE + 11, PREV_TAG_SIZE + TAG_HEADER_SIZE + dataLenth),
+               dataInfo: {}
             };
+
+            var oDataInfo = oMetadata.dataInfo;
+            switch (oMetadata.tagType) {
+               case 8:
+                  // audio
+                  var audioInfo = oMetadata.data.readUInt8();
+                  oDataInfo.audioFormat = audioInfo >> 4;
+                  oDataInfo.audioSampling = (audioInfo & 0xf) >> 2;
+                  oDataInfo.audioSamplingLen = (audioInfo & 0x3) >> 1;
+                  oDataInfo.audioType = (audioInfo & 0x1);
+                  break;
+
+               case 9:
+                  // video
+                  var videoInfo = oMetadata.data.readUInt8();
+                  oDataInfo.videoType = videoInfo >> 4;
+                  oDataInfo.videoEncoder = videoInfo && 0xf;
+                  break;
+
+               case 18:
+                  // script
+                  // TODO - need investigation
+                  break;
+            }
+
 
             if (fOnGetTag) {
                fOnGetTag(bfTag, oMetadata);

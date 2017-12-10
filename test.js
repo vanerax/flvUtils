@@ -21,20 +21,22 @@ var onGetHeader = (bfData) => {
 };
 var onGetTag = (bfData) => {
    console.log(bfData.length);
-   if (bfFirstTag === undefined) {
+   if (nTagIndex == 0) {
       bfFirstTag = bfData;
-      outStream.write(bfFirstTag);
-   }
-   nTagIndex++;
-
-   if (nTagIndex > 1000) {
+      outStream.write(bfData);
+   } else if (nTagIndex < 5) {
       outStream.write(bfData);
    }
+   if (nTagIndex == 5) {
+      outStream.write(bfData.slice(0, 4));
+   }
+
+   nTagIndex++;
 };
 
 var onGetLastTagSize = (bfData) => {
    console.log(bfData.length);
-   outStream.write(bfData);
+   //outStream.write(bfData);
    outStream.end();
 };
 
