@@ -19,7 +19,6 @@ flvUtils.parseStream = function(inStream, options) {
    function parseHeader() {
       inStream.once('data', (chunk) => {
          assert.ok(chunk.length >= 9);
-
          // fill metadata
          var oMetadata = {
             type: chunk.slice(0, 3),

@@ -9,7 +9,7 @@ const FlvStreamMode = {
 class FlvStreamManager {
    constructor() {
       this._mode = FlvStreamMode.FAST_RESPONSE;
-      this._keyFramesToCache = 1;
+      this._keyFramesToCache = 10;
       this._eventEmitter = new EventEmitter();
    }
 
@@ -29,15 +29,17 @@ class FlvStreamManager {
       this._streamCaches = [];
       this._keyFrameIndices = [];
       this._streamTagsCount = 0;
+      this._bPrevAudioSizeUpdated = false;
+      this._fOnDataList = {};
    }
 
    track(flvStream) {
       this.reset();
       this._flvStream = flvStream;
       flvUtils.parseStream(flvStream, {
-         onGetHeader: this._onGetHeader,
-         onGetTag: this._onGetTag,
-         onGetLastTagSize: this._onGetLastTagSize
+         onGetHeader: (bfData, oMetadata) => { this._onGetHeader(bfData, oMetadata); },
+         onGetTag: (bfData, oMetadata) => { this._onGetTag(bfData, oMetadata); },
+         onGetLastTagSize: (bfData, oMetadata) => { this._onGetLastTagSize(bfData, oMetadata); }
       });
    }
 
@@ -54,13 +56,45 @@ class FlvStreamManager {
 
       fOnData(this._streamHeader);
       fOnData(Buffer.concat(this._streamTopTags));
-      this._eventEmitter.addListener('data', fOnData);
+      // start from the key frame
+      var aLatestStream = this._getAllStreamFromCaches();
+      // for (var i=0; i<aLatestStream.length; i++) {
+      //    fOnData(aLatestStream[i]);
+      // }
+      var bfLatestStream = Buffer.concat(aLatestStream);
+      var aPrevAudioSize = Buffer.from([0x0, 0x0, 0x0, 0xf]);
+      aPrevAudioSize.copy(bfLatestStream, 0);
+      console.log(bfLatestStream.slice(0, 20));
+      this._bPrevAudioSizeUpdated = true;
+      fOnData(bfLatestStream);
+
+      var _fOnData = (bfData, oMetadata) => {
+         // if (!this._bPrevAudioSizeUpdated) {
+         //    // the first 4 byte should be update
+
+         // }
+         fOnData(bfData, oMetadata);
+      };
+      this._fOnDataList[fOnData] = _fOnData;
+      this._eventEmitter.addListener('data', _fOnData);
       this._eventEmitter.addListener('end', fOnEnd);
    }
 
    unsubscribe(fOnData, fOnEnd) {
-      this._eventEmitter.removeListener('data', fOnData);
+      var _fOnData = this._fOnDataList[fOnData];
+      console.log(_fOnData);
+      delete this._fOnDataList[fOnData];
+      this._bPrevAudioSizeUpdated = false;
+      this._eventEmitter.removeListener('data', _fOnData);
       this._eventEmitter.removeListener('end', fOnEnd);
+   }
+
+   _onData(bfData, oMetadata, fOnData) {
+
+   }
+
+   _onEnd() {
+      
    }
 
    _onGetHeader(bfData, oMetadata) {
@@ -73,24 +107,30 @@ class FlvStreamManager {
          if (this._streamTagsCount === 2) {
             this._tracking = true;
          }
+         console.log('>>> ', bfData);
       } else {
          this._pushStreamToCaches(bfData, oMetadata);
+         this._eventEmitter.emit('data', bfData);
+         //console.log('>>> ', bfData.length);
       }
       this._streamTagsCount++;
    }
 
    _onGetLastTagSize(bfData, oMetadata) {
-
+      this._eventEmitter.emit('data', bfData);
+      this._eventEmitter.emit('end');
    }
 
    _pushStreamToCaches(bfData, oMetadata) {
-      if (oMetadata.tagType === 9 && oMetadata.videoInfo.type === 1) {
+      if (oMetadata.tagType === 9 && oMetadata.dataInfo.videoType === 1) {
          if (this._keyFrameIndices.length >= this._keyFramesToCache ) {
             this._popStreamFromCaches();
          }
          this._keyFrameIndices.push(this._streamCaches.length);
+         console.log('_keyFrameIndices = ', this._keyFrameIndices);
       }
       this._streamCaches.push(bfData);
+      //console.log('this._streamCaches.length = ' + this._streamCaches.length);
    }
 
    _popStreamFromCaches() {
@@ -105,6 +145,16 @@ class FlvStreamManager {
       for (var i = 0; i < this._keyFrameIndices.length; i++) {
          this._keyFrameIndices[i] -= nToRemove;
       }
+   }
+
+   _getLatestStreamFromCaches() {
+      var nLastPos = this._keyFrameIndices.length - 1;
+      var nLastKeyFrame = this._keyFrameIndices[nLastPos];
+      return this._streamCaches.slice(nLastKeyFrame);
+   }
+
+   _getAllStreamFromCaches() {
+      return this._streamCaches;
    }
 }
 
