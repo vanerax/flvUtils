@@ -107,7 +107,7 @@ flvUtils.parseStream = function(inStream, options) {
                   // video
                   var videoInfo = oMetadata.data.readUInt8();
                   oDataInfo.videoType = videoInfo >> 4;
-                  oDataInfo.videoEncoder = videoInfo && 0xf;
+                  oDataInfo.videoEncoder = videoInfo & 0xf;
                   break;
 
                case 18:
