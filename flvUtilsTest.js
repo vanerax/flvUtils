@@ -3,7 +3,13 @@ const flvUtils = require('./flvUtils');
 const assert = require('assert');
 
 var flvFile = "frame5b.flv";
+
+if (process.argv.length > 2) {
+   flvFile = process.argv[2];
+}
+
 var inStream = fs.createReadStream(flvFile);
+var nTagOffset = 0;
 var nTagIndex = 0;
 
 flvUtils.parseStream(inStream, {
@@ -12,6 +18,7 @@ flvUtils.parseStream(inStream, {
       assert.equal(1, oMetadata.version);
       assert.equal(5, oMetadata.streamInfo);
       assert.equal(9, oMetadata.headerLength);
+      nTagOffset += oMetadata.headerLength;
    },
    onGetTag: function(bfTag, oMetadata) {
       if (nTagIndex === 0) {
@@ -66,7 +73,12 @@ flvUtils.parseStream(inStream, {
          assert.equal(1, oMetadata.dataInfo.audioType);
 
       }
+      console.log(`${nTagIndex} ${oMetadata.tagType} 0x${(nTagOffset+4).toString(16)} `);
+      //console.log("\b\b " + oMetadata.tagType);
+
       nTagIndex++;
+      nTagOffset += 4 + 0xb + oMetadata.dataLength;
+
    },
    onGetLastTagSize: function() {
 
