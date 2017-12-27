@@ -25,12 +25,11 @@ class FlvStreamManager {
       this._tracking = false;
       this._flvStream = null;
       this._streamHeader = null;
-      this._streamTopTags = [];
+      this._streamTopTags = []; // top3 tags
       this._streamCaches = [];
       this._keyFrameIndices = [];
       this._streamTagsCount = 0;
-      this._bPrevAudioSizeUpdated = false;
-      this._fOnDataList = {};
+      this._fOnDataList = [];
    }
 
    track(flvStream) {
@@ -39,7 +38,7 @@ class FlvStreamManager {
       flvUtils.parseStream(flvStream, {
          onGetHeader: (bfData, oMetadata) => { this._onGetHeader(bfData, oMetadata); },
          onGetTag: (bfData, oMetadata) => { this._onGetTag(bfData, oMetadata); },
-         onGetLastTagSize: (bfData, oMetadata) => { this._onGetLastTagSize(bfData, oMetadata); }
+         onGetPrevTagSize: (bfData, oMetadata, nPrevTagIndex) => { this._onGetPrevTagSize(bfData, oMetadata, nPrevTagIndex); }
       });
    }
 
@@ -54,38 +53,55 @@ class FlvStreamManager {
          return;
       }
 
+      // 1. header
+      console.log('> header');
+      console.log(this._streamHeader);
       fOnData(this._streamHeader);
-      fOnData(Buffer.concat(this._streamTopTags));
-      // start from the key frame
-      var aLatestStream = this._getAllStreamFromCaches();
-      // for (var i=0; i<aLatestStream.length; i++) {
-      //    fOnData(aLatestStream[i]);
-      // }
+
+      fOnData(Buffer.alloc(4, 0x00));
+
+      // 2. top 3 tags
+      var aTopTags = this._streamTopTags.map((bfTag) => {
+         return this._appendPrevTagSize(bfTag);
+      });
+      console.log('> top3');
+      aTopTags.forEach((tag) => {
+         console.log(tag);
+      });
+      
+      fOnData(Buffer.concat(aTopTags));
+
+      // 3. start from the key frame
+      var aLatestStream = this._getAllStreamFromCaches().map((bfTag) => {
+         return this._appendPrevTagSize(bfTag);
+      });
       var bfLatestStream = Buffer.concat(aLatestStream);
-      var aPrevAudioSize = Buffer.from([0x0, 0x0, 0x0, 0xf]);
-      aPrevAudioSize.copy(bfLatestStream, 0);
+
       console.log(bfLatestStream.slice(0, 20));
-      this._bPrevAudioSizeUpdated = true;
       fOnData(bfLatestStream);
 
       var _fOnData = (bfData, oMetadata) => {
-         // if (!this._bPrevAudioSizeUpdated) {
-         //    // the first 4 byte should be update
-
-         // }
          fOnData(bfData, oMetadata);
       };
-      this._fOnDataList[fOnData] = _fOnData;
+      var oFnPair = {
+         fOnData: fOnData,
+         fWrappedOnData: _fOnData
+      };
+      //this._fOnDataList[fOnData] = _fOnData;
+      this._fOnDataList.push(oFnPair);
       this._eventEmitter.addListener('data', _fOnData);
       this._eventEmitter.addListener('end', fOnEnd);
    }
 
    unsubscribe(fOnData, fOnEnd) {
-      var _fOnData = this._fOnDataList[fOnData];
-      console.log(_fOnData);
-      delete this._fOnDataList[fOnData];
-      this._bPrevAudioSizeUpdated = false;
-      this._eventEmitter.removeListener('data', _fOnData);
+      for (let i=0; i<this._fOnDataList.length; i++) {
+         var oFnPair = this._fOnDataList[i];
+         if (oFnPair.fOnData === fOnData) {
+            this._eventEmitter.removeListener('data', oFnPair.fWrappedOnData);
+            this._fOnDataList.splice(i, 1);
+            break;
+         }
+      }
       this._eventEmitter.removeListener('end', fOnEnd);
    }
 
@@ -107,18 +123,18 @@ class FlvStreamManager {
          if (this._streamTagsCount === 2) {
             this._tracking = true;
          }
-         console.log('>>> ', bfData);
+         //console.log('>>> ', bfData);
       } else {
-         this._pushStreamToCaches(bfData, oMetadata);
+         this._pushStreamToCaches(bfData, oMetadata); //this._appendPrevTagSize(bfData)
          this._eventEmitter.emit('data', bfData);
          //console.log('>>> ', bfData.length);
       }
       this._streamTagsCount++;
    }
 
-   _onGetLastTagSize(bfData, oMetadata) {
-      this._eventEmitter.emit('data', bfData);
-      this._eventEmitter.emit('end');
+   _onGetPrevTagSize(bfData, oMetadata, nPrevTagIndex) {
+      //console.log(bfData);
+      //this._eventEmitter.emit('data', bfData);
    }
 
    _pushStreamToCaches(bfData, oMetadata) {
@@ -155,6 +171,16 @@ class FlvStreamManager {
 
    _getAllStreamFromCaches() {
       return this._streamCaches;
+   }
+
+   _getTagSizeBuffer(bfTag) {
+      var bfPrevTagSize = Buffer.alloc(4);
+      bfPrevTagSize.writeUInt32BE(bfTag.length);
+      return bfPrevTagSize;
+   }
+
+   _appendPrevTagSize(bfTag) {
+      return Buffer.concat([bfTag, this._getTagSizeBuffer(bfTag)]);
    }
 }
 

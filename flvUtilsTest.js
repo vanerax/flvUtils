@@ -11,6 +11,7 @@ if (process.argv.length > 2) {
 var inStream = fs.createReadStream(flvFile);
 var nTagOffset = 0;
 var nTagIndex = 0;
+var nPrevTagIndex = -1;
 
 flvUtils.parseStream(inStream, {
    onGetHeader: function(bfHeader, oMetadata) {
@@ -22,7 +23,6 @@ flvUtils.parseStream(inStream, {
    },
    onGetTag: function(bfTag, oMetadata) {
       if (nTagIndex === 0) {
-         assert.equal(0, oMetadata.prevTagSize);
          assert.equal(18, oMetadata.tagType);
          assert.equal(0x0146, oMetadata.dataLength);
          assert.equal(0, oMetadata.timestamp);
@@ -30,7 +30,6 @@ flvUtils.parseStream(inStream, {
          assert.equal(0, oMetadata.streamsID);
 
       } else if (nTagIndex === 1) {
-         assert.equal(0x0151, oMetadata.prevTagSize);
          assert.equal(9, oMetadata.tagType); // video
          assert.equal(0x2d, oMetadata.dataLength);
          assert.equal(0, oMetadata.timestamp);
@@ -40,7 +39,6 @@ flvUtils.parseStream(inStream, {
          assert.equal(7, oMetadata.dataInfo.videoEncoder); // AVC
          
       } else if (nTagIndex === 2) {
-         assert.equal(0x38, oMetadata.prevTagSize);
          assert.equal(8, oMetadata.tagType); // audio
          assert.equal(0x04, oMetadata.dataLength);
          assert.equal(0, oMetadata.timestamp);
@@ -52,7 +50,6 @@ flvUtils.parseStream(inStream, {
          assert.equal(1, oMetadata.dataInfo.audioType);
 
       } else if (nTagIndex === 3) {
-         assert.equal(0x0f, oMetadata.prevTagSize);
          assert.equal(9, oMetadata.tagType); // video @ 0x1b1
          assert.equal(0x187db, oMetadata.dataLength);
          assert.equal(0, oMetadata.timestamp);
@@ -61,7 +58,6 @@ flvUtils.parseStream(inStream, {
          assert.equal(1, oMetadata.dataInfo.videoType); // key frame
          assert.equal(7, oMetadata.dataInfo.videoEncoder); // AVC
       } else if (nTagIndex === 4) {
-         assert.equal(0x0187e6, oMetadata.prevTagSize);
          assert.equal(8, oMetadata.tagType); // audio @ 0x1899b
          assert.equal(0x0179, oMetadata.dataLength);
          assert.equal(0x13, oMetadata.timestamp);
@@ -80,7 +76,21 @@ flvUtils.parseStream(inStream, {
       nTagOffset += 4 + 0xb + oMetadata.dataLength;
 
    },
-   onGetLastTagSize: function() {
+   onGetPrevTagSize: function(bfPrevTagSize, nPrevTagSize, nPrevTagIndex) {
+      if (nPrevTagIndex === -1) {
+         assert.equal(0, nPrevTagSize);
+      } else if (nPrevTagIndex === 0) {
+         assert.equal(0x0151, nPrevTagSize);
+      } else if (nPrevTagIndex === 1) {
+         assert.equal(0x38, nPrevTagSize);
+      } else if (nPrevTagIndex === 2) {
+         assert.equal(0x0f, nPrevTagSize);
+      } else if (nPrevTagIndex === 3) {
+         assert.equal(0x0187e6, nPrevTagSize);
+      } else if (nPrevTagIndex === 4) {
 
+      }
+      assert.equal(nPrevTagIndex, nPrevTagIndex);
+      nPrevTagIndex++;
    }
 });

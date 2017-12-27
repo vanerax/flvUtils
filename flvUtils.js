@@ -9,12 +9,14 @@ function flvUtils() {
 
 flvUtils.parseStream = function(inStream, options) {
    var arrBuffer = [];
-   var nStreamIndex = 0;
+   var nStreamOffset = 0;
    var nTagIndex = 0;
+   var nPrevTagIndex = -1;
 
    var fOnGetHeader = options.onGetHeader;
    var fOnGetTag = options.onGetTag;
-   var fOnGetLastTagSize = options.onGetLastTagSize;
+   var fOnGetPrevTagSize = options.onGetPrevTagSize;
+   var fOnEnd = options.onEnd;
 
    function parseHeader() {
       inStream.once('data', (chunk) => {
@@ -30,7 +32,7 @@ flvUtils.parseStream = function(inStream, options) {
          assert.equal('FLV', oMetadata.type.toString());
          
          var bfHeader = chunk.slice(0, oMetadata.headerLength);
-         nStreamIndex += oMetadata.headerLength;
+         nStreamOffset += oMetadata.headerLength;
          
          if (fOnGetHeader) {
             fOnGetHeader(bfHeader, oMetadata);
@@ -50,16 +52,15 @@ flvUtils.parseStream = function(inStream, options) {
       inStream.on('end', () => {
          //parseBodyByBuffer();
          
-         if (arrBuffer.length === 1 && arrBuffer[0].length === PREV_TAG_SIZE) {
-            if (fOnGetLastTagSize) {
-               fOnGetLastTagSize(arrBuffer[0]);
+         if (arrBuffer.length === 1 && arrBuffer[0].length === 0) {
+            if (fOnEnd) {
+               fOnEnd();
             }
-            arrBuffer = [];
-            nStreamIndex += 4;
 
             // end
-            console.log('stream size ', nStreamIndex);
+            console.log('stream size ', nStreamOffset);
             console.log('tag size: ', nTagIndex);
+            console.log('prev tag size: ', nPrevTagIndex);
 
          } else {
             console.log('stream truncated');
@@ -72,23 +73,33 @@ flvUtils.parseStream = function(inStream, options) {
 
    function parseBodyByBuffer() {
       //console.log('>> parseBodyByBuffer');
+
       var bfAll = Buffer.concat(arrBuffer);
-      while (bfAll.length >= PREV_TAG_SIZE + TAG_HEADER_SIZE) {
+      if (nPrevTagIndex === -1) {
+         if (fOnGetPrevTagSize) {
+            var bfPrevTagSize = bfAll.slice(0, PREV_TAG_SIZE);
+            fOnGetPrevTagSize(bfPrevTagSize, bfPrevTagSize.readUInt32BE(), nPrevTagIndex);
+         }
+         bfAll = bfAll.slice(PREV_TAG_SIZE);
+         nPrevTagIndex++;
+      }
+
+      while (bfAll.length >= TAG_HEADER_SIZE) {
          // tag head available
-         var dataLenth = bfAll.readUIntBE(PREV_TAG_SIZE + 1, 3);
+         var dataLenth = bfAll.readUIntBE(1, 3);
          //console.log('>> ', dataLenth);
-         if (bfAll.length >= PREV_TAG_SIZE + TAG_HEADER_SIZE + dataLenth) {
-            var bfTag = bfAll.slice(0, PREV_TAG_SIZE + TAG_HEADER_SIZE + dataLenth);
+         if (bfAll.length >= TAG_HEADER_SIZE + dataLenth + PREV_TAG_SIZE) {
+            var bfTag = bfAll.slice(0, TAG_HEADER_SIZE + dataLenth);
 
             // fill metadata
             var oMetadata = {
-               prevTagSize: bfTag.readUInt32BE(),
-               tagType: bfTag.readUInt8(PREV_TAG_SIZE),
+               //prevTagSize: bfTag.readUInt32BE(),
+               tagType: bfTag.readUInt8(0),
                dataLength: dataLenth,
-               timestamp: bfTag.readUIntBE(PREV_TAG_SIZE + 4, 3),
-               timestampExt: bfTag.readUIntBE(PREV_TAG_SIZE + 7, 1),
-               streamsID: bfTag.readUIntBE(PREV_TAG_SIZE + 8, 3),
-               data: bfTag.slice(PREV_TAG_SIZE + 11, PREV_TAG_SIZE + TAG_HEADER_SIZE + dataLenth),
+               timestamp: bfTag.readUIntBE(4, 3),
+               timestampExt: bfTag.readUIntBE(7, 1),
+               streamsID: bfTag.readUIntBE(8, 3),
+               data: bfTag.slice(TAG_HEADER_SIZE, TAG_HEADER_SIZE + dataLenth),
                dataInfo: {}
             };
 
@@ -116,14 +127,19 @@ flvUtils.parseStream = function(inStream, options) {
                   break;
             }
 
-
             if (fOnGetTag) {
                fOnGetTag(bfTag, oMetadata);
             }
             nTagIndex++;
 
-            bfAll = bfAll.slice(PREV_TAG_SIZE + TAG_HEADER_SIZE + dataLenth);
-            nStreamIndex += PREV_TAG_SIZE + TAG_HEADER_SIZE + dataLenth;
+            if (fOnGetPrevTagSize) {
+               var bfPrevTagSize = bfAll.slice(TAG_HEADER_SIZE + dataLenth, TAG_HEADER_SIZE + dataLenth + PREV_TAG_SIZE);
+               fOnGetPrevTagSize(bfPrevTagSize, bfPrevTagSize.readUInt32BE(), nPrevTagIndex);
+            }
+            nPrevTagIndex++;
+
+            bfAll = bfAll.slice(TAG_HEADER_SIZE + dataLenth + PREV_TAG_SIZE);
+            nStreamOffset += TAG_HEADER_SIZE + dataLenth + PREV_TAG_SIZE;
          } else {
             break;
          }

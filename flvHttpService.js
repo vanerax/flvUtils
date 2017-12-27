@@ -3,6 +3,15 @@ const url = require('url');
 const flvStreamManager = require('./flvStreamManager');
 const douyu = require('./douyu');
 
+// var flvFile = "1511362565.flv";
+// if (process.argv.length > 2) {
+//    flvFile = process.argv[2];
+// }
+// var fs = require('fs');
+// var inStream = fs.createReadStream(flvFile);
+// var fsm = new flvStreamManager.FlvStreamManager();
+// fsm.track(inStream);
+
 if (process.argv.length < 4) {
    console.error('argv should >= 4');
    return;
@@ -96,7 +105,7 @@ var server = http.createServer((req, res) => {
    });
    res.on('close', ()=>{
       console.log('close');
-      fsm.unsubscribe(fOnData, fOnEnd);
+      //fsm.unsubscribe(fOnData, fOnEnd);
    });
 });
 
