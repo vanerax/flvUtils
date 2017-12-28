@@ -36,9 +36,18 @@ class FlvStreamManager {
       this.reset();
       this._flvStream = flvStream;
       flvUtils.parseStream(flvStream, {
-         onGetHeader: (bfData, oMetadata) => { this._onGetHeader(bfData, oMetadata); },
-         onGetTag: (bfData, oMetadata) => { this._onGetTag(bfData, oMetadata); },
-         onGetPrevTagSize: (bfData, oMetadata, nPrevTagIndex) => { this._onGetPrevTagSize(bfData, oMetadata, nPrevTagIndex); }
+         onGetHeader: (bfData, oMetadata) => {
+            this._onGetHeader(bfData, oMetadata);
+         },
+         onGetTag: (bfData, oMetadata) => {
+            this._onGetTag(bfData, oMetadata);
+         },
+         onGetPrevTagSize: (bfData, oMetadata, nPrevTagIndex) => {
+            this._onGetPrevTagSize(bfData, oMetadata, nPrevTagIndex);
+         },
+         onEnd: () => {
+            this._onEnd();
+         }
       });
    }
 
@@ -56,6 +65,7 @@ class FlvStreamManager {
       // 1. header
       console.log('> header');
       console.log(this._streamHeader);
+      // TODO - concat buffer to resolve smplayer issue ?
       fOnData(this._streamHeader);
 
       fOnData(Buffer.alloc(4, 0x00));
@@ -65,11 +75,12 @@ class FlvStreamManager {
          return this._appendPrevTagSize(bfTag);
       });
       console.log('> top3');
-      aTopTags.forEach((tag) => {
-         console.log(tag);
+      aTopTags.forEach((bfTag) => {
+         console.log(bfTag);
+         fOnData(bfTag);
       });
       
-      fOnData(Buffer.concat(aTopTags));
+      //fOnData(Buffer.concat(aTopTags));
 
       // 3. start from the key frame
       var aLatestStream = this._getAllStreamFromCaches().map((bfTag) => {
@@ -77,7 +88,7 @@ class FlvStreamManager {
       });
       var bfLatestStream = Buffer.concat(aLatestStream);
 
-      console.log(bfLatestStream.slice(0, 20));
+      //console.log(bfLatestStream.slice(0, 20));
       fOnData(bfLatestStream);
 
       var _fOnData = (bfData, oMetadata) => {
@@ -109,10 +120,6 @@ class FlvStreamManager {
 
    }
 
-   _onEnd() {
-      
-   }
-
    _onGetHeader(bfData, oMetadata) {
       this._streamHeader = bfData;
    }
@@ -134,7 +141,11 @@ class FlvStreamManager {
 
    _onGetPrevTagSize(bfData, oMetadata, nPrevTagIndex) {
       //console.log(bfData);
-      //this._eventEmitter.emit('data', bfData);
+      // do nothing
+   }
+
+   _onEnd() {
+      this._eventEmitter.emit('end');
    }
 
    _pushStreamToCaches(bfData, oMetadata) {

@@ -76,12 +76,17 @@ flvUtils.parseStream = function(inStream, options) {
 
       var bfAll = Buffer.concat(arrBuffer);
       if (nPrevTagIndex === -1) {
-         if (fOnGetPrevTagSize) {
-            var bfPrevTagSize = bfAll.slice(0, PREV_TAG_SIZE);
-            fOnGetPrevTagSize(bfPrevTagSize, bfPrevTagSize.readUInt32BE(), nPrevTagIndex);
+         if (bfAll.length >= PREV_TAG_SIZE) {
+            if (fOnGetPrevTagSize) {
+               var bfPrevTagSize = bfAll.slice(0, PREV_TAG_SIZE);
+               fOnGetPrevTagSize(bfPrevTagSize, bfPrevTagSize.readUInt32BE(), nPrevTagIndex);
+            }
+            bfAll = bfAll.slice(PREV_TAG_SIZE);
+            nPrevTagIndex++;
+         } else {
+            arrBuffer = [ bfAll ];
+            return;
          }
-         bfAll = bfAll.slice(PREV_TAG_SIZE);
-         nPrevTagIndex++;
       }
 
       while (bfAll.length >= TAG_HEADER_SIZE) {
