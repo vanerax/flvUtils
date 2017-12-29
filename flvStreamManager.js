@@ -21,6 +21,14 @@ class FlvStreamManager {
       this._mode = eMode;
    }
 
+   setKeyFramesToCache(nKeyFrames) {
+      this._keyFramesToCache = nKeyFrames;
+   }
+
+   getKeyFramesToCache() {
+      return this._keyFramesToCache;
+   }
+
    reset() {
       this._tracking = false;
       this._flvStream = null;
