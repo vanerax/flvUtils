@@ -53,12 +53,13 @@ class FlvStreamManager {
          return;
       }
 
+      var bfFirst = Buffer.alloc(0);
+
       // 1. header
       console.log('> header');
       console.log(this._streamHeader);
-      fOnData(this._streamHeader);
-
-      fOnData(Buffer.alloc(4, 0x00));
+      //fOnData(this._streamHeader);
+      bfFirst = Buffer.concat([this._streamHeader, Buffer.alloc(4, 0x00)]);
 
       // 2. top 3 tags
       var aTopTags = this._streamTopTags.map((bfTag) => {
@@ -69,8 +70,9 @@ class FlvStreamManager {
          console.log(tag);
       });
       
-      fOnData(Buffer.concat(aTopTags));
-
+      //fOnData(Buffer.concat(aTopTags));
+      bfFirst = Buffer.concat([bfFirst, Buffer.concat(aTopTags)]);
+      
       // 3. start from the key frame
       var aLatestStream = this._getAllStreamFromCaches().map((bfTag) => {
          return this._appendPrevTagSize(bfTag);
@@ -78,7 +80,9 @@ class FlvStreamManager {
       var bfLatestStream = Buffer.concat(aLatestStream);
 
       console.log(bfLatestStream.slice(0, 20));
-      fOnData(bfLatestStream);
+      // fOnData(bfLatestStream);
+      bfFirst = Buffer.concat([bfFirst, bfLatestStream]);
+      fOnData(bfFirst);
 
       var _fOnData = (bfData, oMetadata) => {
          fOnData(bfData, oMetadata);
@@ -117,17 +121,16 @@ class FlvStreamManager {
       this._streamHeader = bfData;
    }
 
-   _onGetTag(bfData, oMetadata) {
+   _onGetTag(bfTag, oMetadata) {
       if (this._streamTagsCount < 3) {
-         this._streamTopTags.push(bfData);
+         this._streamTopTags.push(bfTag);
          if (this._streamTagsCount === 2) {
             this._tracking = true;
          }
          //console.log('>>> ', bfData);
       } else {
-         this._pushStreamToCaches(bfData, oMetadata); //this._appendPrevTagSize(bfData)
-         this._eventEmitter.emit('data', bfData);
-         //console.log('>>> ', bfData.length);
+         this._pushStreamToCaches(bfTag, oMetadata);
+         this._eventEmitter.emit('data', this._appendPrevTagSize(bfTag));
       }
       this._streamTagsCount++;
    }

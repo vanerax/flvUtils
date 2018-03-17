@@ -99,13 +99,13 @@ var server = http.createServer((req, res) => {
       }
    });
 
-   res.on('end', ()=>{
-      console.log('end');
-      //fsm.unsubscribe(fOnData, fOnEnd);
-   });
+   // res.on('end', ()=>{
+   //    console.log('end');
+   //    //fsm.unsubscribe(fOnData, fOnEnd);
+   // });
    res.on('close', ()=>{
       console.log('close');
-      //fsm.unsubscribe(fOnData, fOnEnd);
+      fsm.unsubscribe(fOnData, fOnEnd);
    });
 });
 
