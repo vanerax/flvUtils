@@ -21,6 +21,14 @@ class FlvStreamManager {
       this._mode = eMode;
    }
 
+   setKeyFramesToCache(nKeyFrames) {
+      this._keyFramesToCache = nKeyFrames;
+   }
+
+   getKeyFramesToCache() {
+      return this._keyFramesToCache;
+   }
+
    reset() {
       this._tracking = false;
       this._flvStream = null;
@@ -36,9 +44,18 @@ class FlvStreamManager {
       this.reset();
       this._flvStream = flvStream;
       flvUtils.parseStream(flvStream, {
-         onGetHeader: (bfData, oMetadata) => { this._onGetHeader(bfData, oMetadata); },
-         onGetTag: (bfData, oMetadata) => { this._onGetTag(bfData, oMetadata); },
-         onGetPrevTagSize: (bfData, oMetadata, nPrevTagIndex) => { this._onGetPrevTagSize(bfData, oMetadata, nPrevTagIndex); }
+         onGetHeader: (bfData, oMetadata) => {
+            this._onGetHeader(bfData, oMetadata);
+         },
+         onGetTag: (bfData, oMetadata) => {
+            this._onGetTag(bfData, oMetadata);
+         },
+         onGetPrevTagSize: (bfData, oMetadata, nPrevTagIndex) => {
+            this._onGetPrevTagSize(bfData, oMetadata, nPrevTagIndex);
+         },
+         onEnd: () => {
+            this._onEnd();
+         }
       });
    }
 
@@ -66,8 +83,9 @@ class FlvStreamManager {
          return this._appendPrevTagSize(bfTag);
       });
       console.log('> top3');
-      aTopTags.forEach((tag) => {
-         console.log(tag);
+      aTopTags.forEach((bfTag) => {
+         console.log(bfTag);
+         fOnData(bfTag);
       });
       
       //fOnData(Buffer.concat(aTopTags));
@@ -113,10 +131,6 @@ class FlvStreamManager {
 
    }
 
-   _onEnd() {
-      
-   }
-
    _onGetHeader(bfData, oMetadata) {
       this._streamHeader = bfData;
    }
@@ -137,7 +151,11 @@ class FlvStreamManager {
 
    _onGetPrevTagSize(bfData, oMetadata, nPrevTagIndex) {
       //console.log(bfData);
-      //this._eventEmitter.emit('data', bfData);
+      // do nothing
+   }
+
+   _onEnd() {
+      this._eventEmitter.emit('end');
    }
 
    _pushStreamToCaches(bfData, oMetadata) {
